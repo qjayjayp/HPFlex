@@ -671,12 +671,30 @@ public class MainActivity extends Activity {
     // ---------- logout ----------
 
     private void stepLogout() {
+        // The logout request has to carry the session header, so the stored token must still
+        // be there when api() builds the request. step() runs on the net executor and returns
+        // at once — removing the session here (as before) raced ahead of the request and the
+        // call went out without swm_hp_authorization => 403 SECURITY_EXCEPTION.
         step("POST v3/user/logout", () -> {
+            String session = sp.getString("session", "");
+            if (session == null || session.isEmpty()) {
+                log("(no session stored — nothing to log out. The endpoint answers 403"
+                    + " SECURITY_EXCEPTION / NOT_APPLICABLE without a session, exactly like step 3.)");
+                return;
+            }
             String[] r = api("POST", "/v3/user/logout", "{}");
             show(Integer.parseInt(r[0]), r[1]);
+            if (r[0].equals("200")) {
+                sp.edit().remove("session").apply();
+                log("(session ended on the server and removed from app storage)");
+            } else if (r[0].equals("403")) {
+                sp.edit().remove("session").apply();
+                log("(the backend does not know this session — already logged out or expired;"
+                    + " local copy removed. Use 'login' for a fresh one.)");
+            } else {
+                log("(session KEPT in app storage — logout failed with HTTP " + r[0] + ")");
+            }
         });
-        sp.edit().remove("session").apply();
-        log("(session removed from app storage)");
     }
 
     @Override
