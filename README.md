@@ -1,6 +1,6 @@
 # HP Flex — HandyParken flex-parking manual stepper
 
-"AI (qwen-3.8-flash-next) generated copy of the original app (only supports flex parking and M-Login), due to frustation about the update policy, runs on Android 5 and will see how many updates for just parking are really needed."
+"AI (qwen-3.8-flash-next) generated copy of the original app (only supports flex parking and M-Login), due to frustation about the update policy, runs on Android 5 and will see how many updates for just parking are really needed. Only supports M-Login and FlexParking at the moment."
 
 Tiny Android app (plain Java, framework-only, no AndroidX/Gradle deps) that exposes
 every step of the flex-parking ("offener Parkschein") protocol as a button, mirroring
