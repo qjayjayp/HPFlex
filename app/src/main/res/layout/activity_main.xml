@@ -1,0 +1,136 @@
+<?xml version="1.0" encoding="utf-8"?>
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:orientation="vertical"
+    android:padding="8dp">
+
+    <TextView
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:text="HandyParken flex — manual steps"
+        android:textStyle="bold"
+        android:paddingBottom="4dp" />
+
+    <!-- Step buttons -->
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:orientation="horizontal">
+
+        <Button android:id="@+id/btnInfo" android:layout_width="0dp" android:layout_height="wrap_content"
+            android:layout_weight="1" android:textAllCaps="false" android:textSize="12sp" android:text="1 info" />
+        <Button android:id="@+id/btnLogin" android:layout_width="0dp" android:layout_height="wrap_content"
+            android:layout_weight="1" android:textAllCaps="false" android:textSize="12sp" android:text="2 login" />
+        <Button android:id="@+id/btnStatus" android:layout_width="0dp" android:layout_height="wrap_content"
+            android:layout_weight="1" android:textAllCaps="false" android:textSize="12sp" android:text="3 status" />
+        <Button android:id="@+id/btnVehicles" android:layout_width="0dp" android:layout_height="wrap_content"
+            android:layout_weight="1" android:textAllCaps="false" android:textSize="12sp" android:text="4 kfz" />
+    </LinearLayout>
+
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:orientation="horizontal">
+
+        <Button android:id="@+id/btnTarif" android:layout_width="0dp" android:layout_height="wrap_content"
+            android:layout_weight="1" android:textAllCaps="false" android:textSize="12sp" android:text="5 tarif" />
+        <Button android:id="@+id/btnStart" android:layout_width="0dp" android:layout_height="wrap_content"
+            android:layout_weight="1" android:textAllCaps="false" android:textSize="12sp" android:text="6 start" />
+        <Button android:id="@+id/btnStop" android:layout_width="0dp" android:layout_height="wrap_content"
+            android:layout_weight="1" android:textAllCaps="false" android:textSize="12sp" android:text="7 stop" />
+        <Button android:id="@+id/btnLogout" android:layout_width="0dp" android:layout_height="wrap_content"
+            android:layout_weight="1" android:textAllCaps="false" android:textSize="12sp" android:text="logout" />
+    </LinearLayout>
+
+    <!-- Inputs: position (manual or GPS) -->
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:orientation="horizontal">
+
+        <EditText android:id="@+id/inLat" android:layout_width="0dp" android:layout_height="wrap_content"
+            android:layout_weight="1" android:hint="lat" android:inputType="numberDecimal|numberSigned"
+            android:textSize="13sp" />
+        <EditText android:id="@+id/inLng" android:layout_width="0dp" android:layout_height="wrap_content"
+            android:layout_weight="1" android:hint="lng" android:inputType="numberDecimal|numberSigned"
+            android:textSize="13sp" />
+        <Button android:id="@+id/btnGps" android:layout_width="wrap_content" android:layout_height="wrap_content"
+            android:textAllCaps="false" android:textSize="12sp" android:text="GPS" />
+    </LinearLayout>
+
+    <!-- Inputs: vehicle (id + plate, auto-filled by step 4 when unique) -->
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:orientation="horizontal">
+
+        <EditText android:id="@+id/inKennz" android:layout_width="0dp" android:layout_height="wrap_content"
+            android:layout_weight="1" android:hint="Kennzeichen" android:inputType="textCapCharacters"
+            android:textSize="13sp" />
+        <EditText android:id="@+id/inKfzId" android:layout_width="0dp" android:layout_height="wrap_content"
+            android:layout_weight="1" android:hint="Kfz-ID" android:inputType="number"
+            android:textSize="13sp" />
+        <Button android:id="@+id/btnClearKfz" android:layout_width="wrap_content" android:layout_height="wrap_content"
+            android:textAllCaps="false" android:textSize="12sp" android:text="no kfz" />
+    </LinearLayout>
+
+    <!-- App version code reported to the backend: free text, or pick a known one -->
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:orientation="horizontal">
+
+        <EditText android:id="@+id/inAppVer" android:layout_width="0dp" android:layout_height="wrap_content"
+            android:layout_weight="1" android:hint="app version code (sent to backend)" android:inputType="number"
+            android:textSize="13sp" />
+        <Button android:id="@+id/btnVerList" android:layout_width="wrap_content" android:layout_height="wrap_content"
+            android:textAllCaps="false" android:textSize="12sp" android:text="known &#x25BE;" />
+    </LinearLayout>
+
+    <!-- In-app browser for M-Login (hidden until login) -->
+    <LinearLayout
+        android:id="@+id/loginBar"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:orientation="horizontal"
+        android:visibility="gone">
+        <Button android:id="@+id/btnLoginDone" android:layout_width="wrap_content" android:layout_height="wrap_content"
+            android:textAllCaps="false" android:textSize="12sp" android:text="close login view" />
+        <TextView android:id="@+id/loginHint" android:layout_width="0dp" android:layout_height="wrap_content"
+            android:layout_weight="1" android:textSize="12sp"
+            android:text="Log in here. When it redirects (unknown address), the code is caught automatically." />
+    </LinearLayout>
+
+    <WebView
+        android:id="@+id/web"
+        android:layout_width="match_parent"
+        android:layout_height="0dp"
+        android:layout_weight="0"
+        android:visibility="gone" />
+
+    <ScrollView
+        android:id="@+id/outScroll"
+        android:layout_width="match_parent"
+        android:layout_height="0dp"
+        android:layout_weight="1">
+        <TextView
+            android:id="@+id/out"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:typeface="monospace"
+            android:textSize="12sp"
+            android:textIsSelectable="true"
+            android:paddingTop="6dp"
+            android:text="(output appears here)" />
+    </ScrollView>
+
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:orientation="horizontal">
+        <Button android:id="@+id/btnClear" android:layout_width="wrap_content" android:layout_height="wrap_content"
+            android:textAllCaps="false" android:textSize="12sp" android:text="clear log" />
+    </LinearLayout>
+
+</LinearLayout>
