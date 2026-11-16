@@ -31,8 +31,9 @@ HP_CLIENTID="handyparken"
 HP_REDIRECT="de.swm.login.handyparken:/oauth2redirect"
 HP_MLOGIN_HOST="https://login.muenchen.de"
 
-HP_KFZ_ID="..."
-HP_KFZ_PLATE="..."
+# Use vehicle to get values
+#HP_KFZ_ID="..."
+#HP_KFZ_PLATE="..."
 
 need() { command -v "$1" >/dev/null || { echo "missing tool: $1" >&2; exit 1; }; }
 need curl; need jq
@@ -66,6 +67,10 @@ api() {
   http=$(tail -n1 <<<"$resp")
   printf '%s' "${resp%$'\n'*}" | jq "$MARK" 2>/dev/null || printf '%s' "${resp%$'\n'*}"
   echo "HTTP $http" >&2
+  if [ "$http" = 403 ] && [ ! -s "$HP_SESSION" ]; then
+    echo "note: no session stored ($HP_SESSION) — without the swm_hp_authorization header every session" >&2
+    echo "      endpoint answers 403 SECURITY_EXCEPTION/NOT_APPLICABLE. Run: $0 login" >&2
+  fi
   [ "$http" -ge 400 ] && return 1
   return 0
 }
@@ -155,18 +160,18 @@ start)
   fi
   tic=$(jq -r '.parkingTimeInterval // empty' <<<"$tarif")
   echo "Tarif: $(jq -r '.tarifID + " / " + .formatierterPreisEUR' <<<"$tarif")"
-  # warning: outside paid flex hours the server hands out a degenerate ~1-minute
-  # ticket that auto-finishes (status FINISHED_AUTOMATICALLY) — same in the real app.
+  # For a Flex (open-ended) request the server always answers with a degenerate
+  # ~1-minute parkingTimeInterval: an open ticket simply has no fixed end, so the
+  # interval is only a minimum-duration placeholder. It must NOT be echoed back into
+  # the purchase — that is what turns the ticket into a fixed 1-minute one.
   if [ -n "$tic" ]; then
     span_min=$(( (${tic##*-} - ${tic%%-*}) / 60000 ))
     if [ "$span_min" -le 2 ]; then
-      abs_min=$(jq -r '.absoluteParkDauerInMinuten // "?"' <<<"$tarif")
       ab=$(jq -r '.abrechnungsStart // empty' <<<"$tarif")
-      echo "WARNING: the sellable window here right now is only ${span_min} min (absoluteParkDauerInMinuten=$abs_min)." >&2
-      echo "         You are outside the paid flex hours of this tariff (parking currently free);" >&2
-      echo "         buying now creates a ~${span_min}-min ticket that ENDS AUTOMATICALLY." >&2
-      [ -n "$ab" ] && echo "         First billing time for this tariff: $(date -d "@$((ab / 1000))" '+%F %T')" >&2
-      echo "         (On weekdays this window spans the rest of the paid segment, so the ticket runs until stopped or 23:00.)" >&2
+      echo "note: resolve offers only a ${span_min}-min window here — that is the normal Flex placeholder." >&2
+      [ -n "$ab" ] && echo "      first billing time of this tariff: $(date -d "@$((ab / 1000))" '+%F %T')" >&2
+      echo "      the purchase below sends openTicket=true without parkingTimeInterval, so the ticket" >&2
+      echo "      stays open (end = null, billed per minute) until 'flexparken.sh stop'." >&2
     fi
   fi
 
@@ -179,19 +184,24 @@ start)
   fi
 
   # 3) preauthorize — backend computes price and returns one-time "payload"
+  #    wire name of the flex flag is "openTicket": the DTO field is called
+  #    isOpenTicket, but the backend maps the boolean is-getter to "openTicket"
+  #    (that is also the key it answers with). Sending "isOpenTicket" is silently
+  #    ignored -> the server treats it as a FIXED ticket: with the 1-minute interval
+  #    from resolve it sells a 1-minute ticket, without an interval it answers
+  #    401 PURCHASE_SECURITY_EXCEPTION. For an open ticket no parkingTimeInterval
+  #    (and no parkDauerInMinutes) is sent at all -> ticketEndInMs = null.
   req=$(jq -n \
-    --argjson isOpenTicket true \
     --argjson lat "$lat" --argjson lng "$lng" \
-    --arg tic "$tic" --argjson kfz "$kfz" \
+    --argjson kfz "$kfz" \
     --arg inst "$(install_id)" --arg appver "$HP_APPVER" \
-    '{isOpenTicket:$isOpenTicket, userLat:$lat, userLng:$lng,
+    '{openTicket:true, userLat:$lat, userLng:$lng,
       paymentType:"MLOGIN",                       # charge M-Login payment method (no wallet token needed)
       versionInfoDTO:{appVersion:$appver, operatingSystem:"ANDROID"},
       appInstallation:{appInstallationId:$inst, operatingSystem:"ANDROID", sprache:"de"},
-      kfz:$kfz}
-     + (if $tic == "" then {} else {parkingTimeInterval:$tic} end)')
+      kfz:$kfz}')
   pre=$(api_raw POST "$HP_BASE/v5/purchase/preauthorize" "$req")
-  echo "--- preauthorize ---"; jq '{ticketUUID, priceEUR, formattedPrice, isOpenTicket, ticketStartInMs, maxPreisProParkvorgangInCent}' <<<"$pre" | markdates
+  echo "--- preauthorize ---"; jq '{ticketUUID, priceEUR, formattedPrice, openTicket, ticketStartInMs, ticketEndInMs, maxPreisProParkvorgangInCent}' <<<"$pre" | markdates
   printf 'Confirm purchase of FlexParken ticket at %s EUR? [y/N] ' "$(jq -r '.formattedPrice // .priceEUR' <<<"$pre")"
   read -r y; [ "$y" = "y" ] || { echo "aborted (preauthorization expires on its own)"; exit 1; }
 
@@ -199,10 +209,14 @@ start)
   conf=$(jq -n --arg p "$(jq -r '.payload' <<<"$pre")" '{encryptedPayload:$p}')
   echo "--- confirm ---"
   confresp=$(api_raw POST "$HP_BASE/v5/purchase/confirm" "$conf")
-  jq '{purchasedParkschein: (.purchasedParkschein | {uuid, backofficeid, status, start, "end", price, kfzKennzeichen}), beginAbrechnungInMs}' <<<"$confresp" | markdates
+  jq '{purchasedParkschein: (.purchasedParkschein | {uuid, backofficeid, status, open, start, "end", price, kfzKennzeichen}), beginAbrechnungInMs}' <<<"$confresp" | markdates
   st=$(jq -r '.purchasedParkschein.start // empty' <<<"$confresp"); en=$(jq -r '.purchasedParkschein.end // empty' <<<"$confresp"); ba=$(jq -r '.beginAbrechnungInMs // 0' <<<"$confresp")
-  if [ -n "$st" ] && [ -n "$en" ]; then
-    echo "  ticket: $(date -d "@$((st / 1000))" '+%F %T') .. $(date -d "@$((en / 1000))" '+%F %T')$( [ "$ba" -ge 1000000000000 ] && printf '; billing from %s' "$(date -d "@$((ba / 1000))" '+%F %T')")"
+  if [ -n "$st" ]; then
+    if [ -z "$en" ]; then
+      echo "  ticket: $(date -d "@$((st / 1000))" '+%F %T') .. open end (billed per minute until you stop it)"
+    else
+      echo "  ticket: $(date -d "@$((st / 1000))" '+%F %T') .. $(date -d "@$((en / 1000))" '+%F %T')$( [ "$ba" -ge 1000000000000 ] && printf '; billing from %s' "$(date -d "@$((ba / 1000))" '+%F %T')")"
+    fi
   fi
   echo "Flex ticket running. Stop it later with: $0 stop"
   ;;
@@ -212,8 +226,24 @@ stop)
   ;;
 
 logout)
-  api POST "$HP_BASE/v3/user/logout"
-  rm -f "$HP_SESSION"
+  # the logout request itself needs the session header — drop the local token only afterwards
+  if [ ! -s "$HP_SESSION" ]; then
+    echo "no session stored ($HP_SESSION) — nothing to log out." >&2
+    echo "note: every session endpoint (status, logout, ...) answers 403 SECURITY_EXCEPTION /" >&2
+    echo "      NOT_APPLICABLE 'Unerwarteter Fehler.' when the session header is missing or the" >&2
+    echo "      session is no longer known — that is not a separate error." >&2
+    exit 0
+  fi
+  # command substitution puts api_raw in a subshell, so its exit-on-error cannot skip the cleanup
+  if lbody=$(api_raw POST "$HP_BASE/v3/user/logout" '{}'); then
+    printf '%s' "$lbody" | jq "$MARK" 2>/dev/null || printf '%s\n' "$lbody"
+    rm -f "$HP_SESSION"
+    echo "logged out: server session ended, local token removed"
+  else
+    rm -f "$HP_SESSION"
+    echo "(local token removed as well; 403 means the backend no longer knows this session —" >&2
+    echo " it was already logged out or expired. Use '$0 login' for a fresh one.)" >&2
+  fi
   ;;
 
 *)
